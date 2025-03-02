@@ -3,6 +3,7 @@ import json
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+import pandas as pd
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from sklearn.metrics import accuracy_score, f1_score, mean_squared_error
 
@@ -54,7 +55,7 @@ def evaluate_model(model_name, model, tokenizer, texts, labels):
     f1 = f1_score(labels, predictions, average='weighted')
     rmse = np.sqrt(mean_squared_error(labels, predictions))
     
-    return acc, f1, rmse, inference_time
+    return acc, f1, rmse, inference_time, predictions
 
 # Load dataset
 json_file = "LiveCode_original.json"
@@ -62,18 +63,30 @@ bug_reports, labels = load_dataset(json_file)
 
 # Iterate over models and evaluate
 results = {}
+predictions_data = []
+
 for model_name, model_path in models.items():
     print(f"Evaluating {model_name}...")
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     model = AutoModelForSequenceClassification.from_pretrained(model_path, num_labels=1)  # Regression task
     
-    acc, f1, rmse, inference_time = evaluate_model(model_name, model, tokenizer, bug_reports, labels)
+    acc, f1, rmse, inference_time, predictions = evaluate_model(model_name, model, tokenizer, bug_reports, labels)
     results[model_name] = {
         "Accuracy": acc,
         "F1-score": f1,
         "RMSE": rmse,
         "Inference Time (ms/sample)": inference_time
     }
+    
+    for i, pred in enumerate(predictions):
+        predictions_data.append([model_name, bug_reports[i], labels[i], pred])
+
+# Save results to CSV
+results_df = pd.DataFrame(results).T
+results_df.to_csv("model_results.csv", index=True)
+
+predictions_df = pd.DataFrame(predictions_data, columns=["Model", "Bug Report", "Actual Fix Time", "Predicted Fix Time"])
+predictions_df.to_csv("predictions.csv", index=False)
 
 # Generate and save plots
 metrics = ["Accuracy", "F1-score", "RMSE", "Inference Time (ms/sample)"]
